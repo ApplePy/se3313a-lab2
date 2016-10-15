@@ -1,5 +1,9 @@
 package ca.uwo.eng.se3313.lab2;
 
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
+import android.support.annotation.UiThread;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.widget.EditText;
@@ -72,11 +76,98 @@ public class MainActivity extends AppCompatActivity {
         add("http://i.imgur.com/dci41f3.jpg");
     }};
 
+    // The range of allowable timing values
+    private final static int maxTime = 60;
+    private final static int minTime = 5;
+    private static int currentTimeLeft = 5;
+    private static int currentMaxTime = 5;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Insert your code here (and within the class!)
+
+        // Populate private members
+        ivDisplay = (ImageView) findViewById(R.id.ivDisplay);
+        skipBtn = (ImageButton) findViewById(R.id.btnSkip);
+        pbTimeLeft = (ProgressBar) findViewById(R.id.pbTimeLeft);
+        tvTimeLeft = (TextView) findViewById(R.id.tvTimeLeft);
+        sbWaitTime = (SeekBar) findViewById(R.id.sbWaitTime);
+        etWaitTime = (EditText) findViewById(R.id.etWaitTime);
+        imgDownloader = new ImgDownload();
+
+
+        // Initialize progress bar and edit text and slider to same value (60s)
+        ResetTimingUI();
+
+        // Set up message loop
+        Handler uiHandler = new Handler(Looper.getMainLooper()) {
+            final int CHANGE_IMAGE = 9003;
+
+            // Scary Java magic aside, stuff inside handleMessage is handled custom
+            @Override
+            public void handleMessage(Message inputMessage) {
+                switch (inputMessage.what) {
+                    case InfiniteCounter.TIMER:
+                        // Calculate new progress
+                        //currentTimeLeft = Integer.parseInt(tvTimeLeft.getText().toString()) - 1;
+
+                        // Update UI
+                        if (currentTimeLeft >= 0) {
+                            //UpdateTimingUI();
+                        } else {
+                            //this.sendEmptyMessage(CHANGE_IMAGE);
+                        }
+                        break;
+                    case 9002:
+                        // TODO: Implement scrollbar changed value
+                        break;
+                    case 9003:
+                        //ResetTimingUI();
+                        // TODO: Download cat, reset timer, update image.
+                }
+            }
+        };
+
+        // Add ability to change time
+        sbWaitTime.setOnSeekBarChangeListener( new SeekBar.OnSeekBarChangeListener(){
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                uiHandler.sendEmptyMessage(9002);
+            }
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+
+        // Create timer to trigger countdowns
+        new InfiniteCounter(5 * 1000, 1000, uiHandler).start();
+
+    }
+
+    @UiThread
+    private void UpdateTimingUI() {
+        Integer progressPercent = currentTimeLeft * 100 / currentMaxTime;
+        pbTimeLeft.setProgress(progressPercent);
+        etWaitTime.setText(
+                Integer.valueOf(currentTimeLeft).toString().toCharArray(),
+                0,
+                Integer.valueOf(currentTimeLeft).toString().length()
+        );  // LAZINESS
+        tvTimeLeft.setText(
+                Integer.valueOf(currentTimeLeft).toString().toCharArray(),
+                0,
+                Integer.valueOf(currentTimeLeft).toString().length()
+        );  // LAZINESS
+    }
+
+    @UiThread
+    private void ResetTimingUI() {
+        sbWaitTime.setProgress(100);
+        currentTimeLeft = currentMaxTime;
+        UpdateTimingUI();
     }
 }
+
