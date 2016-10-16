@@ -1,5 +1,6 @@
 package ca.uwo.eng.se3313.lab2;
 
+import android.graphics.Bitmap;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
@@ -18,6 +19,7 @@ import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.Semaphore;
 
 public class MainActivity extends AppCompatActivity {
@@ -198,7 +200,10 @@ public class MainActivity extends AppCompatActivity {
                         break;
                     case CHANGE_IMAGE:
                         Log.d("CHANGE_IMAGE", "triggered");
-                        // TODO: Download image
+                        imgDownloader.download(
+                                urlList.get(new Random().nextInt(urlList.size())),
+                                (Bitmap image) -> ivDisplay.setImageBitmap(image)
+                        );
                         timeState.resetCurrentTimeLeft();
                         updateTimeCountdownUI(timeState.getCurrentMaxTime());
                         break;
@@ -220,6 +225,9 @@ public class MainActivity extends AppCompatActivity {
                 uiHandler.sendMessage(Message.obtain(uiHandler, MAX_CHANGE, seekBar.getProgress()));
             }
         });
+
+        // Start with first image
+        uiHandler.sendEmptyMessage(CHANGE_IMAGE);
 
         // Create timer to trigger countdowns
         new InfiniteCounter(timeState.maxTime * 1000, 1000, uiHandler).start();
