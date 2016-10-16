@@ -171,7 +171,7 @@ public class MainActivity extends AppCompatActivity {
         tvTimeLeft = (TextView) findViewById(R.id.tvTimeLeft);
         sbWaitTime = (SeekBar) findViewById(R.id.sbWaitTime);
         etWaitTime = (EditText) findViewById(R.id.etWaitTime);
-        imgDownloader = new ImgDownload();
+        imgDownloader = new ImgDownload(this);
 
 
         // Initialize progress bar and edit text and slider to same value (60s)
