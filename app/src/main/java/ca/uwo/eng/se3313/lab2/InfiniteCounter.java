@@ -15,7 +15,7 @@ class InfiniteCounter extends CountDownTimer {
     static final int TIMER = 9001;
 
     // HAX! Workaround to beat "missing last tick" issue.
-    boolean tick = false;
+    private boolean tick = false;
 
     InfiniteCounter(int finishMillis, int onTickMillis, Handler customHandler) {
         super(finishMillis, onTickMillis / 2);
@@ -26,18 +26,15 @@ class InfiniteCounter extends CountDownTimer {
 
     @Override
     public void onTick(long millisUntilFinished) {
-        Log.d("onTick", Long.toString(millisUntilFinished));
         // HAX! Workaround to beat "missing last tick" issue.
         tick = !tick;
         if (tick) {
-            Log.d ("onTick", "TOCK");
             customHandler.sendEmptyMessage(TIMER);
         }
     }
 
     @Override
     public void onFinish() {
-        Log.d("onFinish", "Finished.");
         new InfiniteCounter(finishMillis, onTickMillis * 2, customHandler).start();
     }
 }
