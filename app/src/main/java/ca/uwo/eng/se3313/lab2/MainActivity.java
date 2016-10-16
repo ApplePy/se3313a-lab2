@@ -3,9 +3,12 @@ package ca.uwo.eng.se3313.lab2;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.support.annotation.Nullable;
 import android.support.annotation.UiThread;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
+import android.view.View;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -15,6 +18,7 @@ import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Semaphore;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -76,16 +80,81 @@ public class MainActivity extends AppCompatActivity {
         add("http://i.imgur.com/dci41f3.jpg");
     }};
 
-    // The range of allowable timing values
-    private final static int maxTime = 60;
-    private final static int minTime = 5;
-    private static int currentTimeLeft = 5;
-    private static int currentMaxTime = 5;
+    private class TimeState {
+        // The range of allowable timing values and current time (MainActivity owns the state)
+        final int maxTime = 60;
+        final int minTime = 5;
+        private int currentTimeLeft = maxTime;
+        private int currentMaxTime = maxTime;
+
+        // Lock objects
+        // PREVENT DEADLOCK! Grab currentTimeLock before MaxTime!
+        private final Object timeLeftLock = new Object();
+        private final Object maxTimeLock = new Object();
+
+
+        int getCurrentTimeLeft() {synchronized (timeLeftLock) {return currentTimeLeft;}}
+        int getCurrentMaxTime() {synchronized (maxTimeLock) {return currentMaxTime;}}
+        @Nullable
+        Integer decrementTimeLeft() {
+            synchronized (timeLeftLock) {
+                if (currentTimeLeft - 1 >= 0) {
+                    return --currentTimeLeft;
+                } else {
+                    return null;
+                }
+            }
+        }
+        @Deprecated
+        private boolean setCurrentTimeLeft(int newTime) {
+            synchronized (timeLeftLock) {
+                synchronized (maxTimeLock) {
+                    if (newTime >= 0 && newTime <= currentMaxTime) {
+                        currentTimeLeft = newTime;
+                        return true;
+                    }
+                    return false;
+                }
+            }
+        }
+        int resetCurrentTimeLeft() {
+            synchronized (timeLeftLock) {
+                synchronized (maxTimeLock) {
+                    currentTimeLeft = currentMaxTime;
+                    return currentMaxTime;
+                }
+            }
+        }
+        void setCurrentMaxTime(int newMax) {
+            synchronized (timeLeftLock) {
+                synchronized (maxTimeLock) {
+                    if (newMax <= maxTime && newMax >= minTime) {
+                        currentMaxTime = newMax;
+                    } else if (newMax > maxTime) {
+                        currentMaxTime = maxTime;
+                    } else if (newMax < minTime) {
+                        currentMaxTime = minTime;
+                    }
+
+                    if (currentTimeLeft > currentMaxTime) {
+                        currentTimeLeft = currentMaxTime;
+                    }
+                }
+            }
+        }
+    }
+
+    TimeState timeState = new TimeState();
+
+    // Message loop "what"
+    final static int MAX_CHANGE = 9002;
+    final static int CHANGE_IMAGE = 9003;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
 
 
         // Populate private members
@@ -99,63 +168,67 @@ public class MainActivity extends AppCompatActivity {
 
 
         // Initialize progress bar and edit text and slider to same value (60s)
-        ResetTimingUI();
+        updateTimeCountdownUI(timeState.getCurrentMaxTime());
+        updateTimingControls(timeState.getCurrentMaxTime());
+
 
         // Set up message loop
         Handler uiHandler = new Handler(Looper.getMainLooper()) {
-            final int CHANGE_IMAGE = 9003;
-
             // Scary Java magic aside, stuff inside handleMessage is handled custom
             @Override
             public void handleMessage(Message inputMessage) {
                 switch (inputMessage.what) {
                     case InfiniteCounter.TIMER:
                         // Calculate new progress
-                        //currentTimeLeft = Integer.parseInt(tvTimeLeft.getText().toString()) - 1;
+                        Integer proposedNewTime = timeState.decrementTimeLeft();
 
                         // Update UI
-                        if (currentTimeLeft >= 0) {
-                            //UpdateTimingUI();
+                        if (proposedNewTime != null) {
+                            updateTimeCountdownUI(proposedNewTime);
                         } else {
-                            //this.sendEmptyMessage(CHANGE_IMAGE);
+                            this.sendEmptyMessage(CHANGE_IMAGE);
                         }
                         break;
-                    case 9002:
-                        // TODO: Implement scrollbar changed value
+                    case MAX_CHANGE:  // Scroll bar or edit text changed
+                        Log.d("MAX_CHANGE", "triggered");
+                        timeState.setCurrentMaxTime((int)inputMessage.obj);
+                        updateTimingControls(timeState.getCurrentMaxTime());
+                        updateTimeCountdownUI(timeState.getCurrentTimeLeft());
                         break;
-                    case 9003:
-                        //ResetTimingUI();
-                        // TODO: Download cat, reset timer, update image.
+                    case CHANGE_IMAGE:
+                        Log.d("CHANGE_IMAGE", "triggered");
+                        // TODO: Download image
+                        timeState.resetCurrentTimeLeft();
+                        updateTimeCountdownUI(timeState.getCurrentMaxTime());
+                        break;
                 }
             }
         };
 
+        // Add functionality to skip button
+        skipBtn.setOnClickListener((View v) -> uiHandler.sendEmptyMessage(CHANGE_IMAGE));
+
         // Add ability to change time
         sbWaitTime.setOnSeekBarChangeListener( new SeekBar.OnSeekBarChangeListener(){
             @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                uiHandler.sendEmptyMessage(9002);
-            }
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {}
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {}
             @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {}
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                uiHandler.sendMessage(Message.obtain(uiHandler, MAX_CHANGE, seekBar.getProgress()));
+            }
         });
 
         // Create timer to trigger countdowns
-        new InfiniteCounter(5 * 1000, 1000, uiHandler).start();
-
+        new InfiniteCounter(timeState.maxTime * 1000, 1000, uiHandler).start();
     }
 
     @UiThread
-    private void UpdateTimingUI() {
-        Integer progressPercent = currentTimeLeft * 100 / currentMaxTime;
+    // Does this need to be synchronized? Only one UI thread though, so I should be good?
+    private void updateTimeCountdownUI(int currentTimeLeft) {
+        Integer progressPercent = 100 - currentTimeLeft * 100 / timeState.getCurrentMaxTime();
         pbTimeLeft.setProgress(progressPercent);
-        etWaitTime.setText(
-                Integer.valueOf(currentTimeLeft).toString().toCharArray(),
-                0,
-                Integer.valueOf(currentTimeLeft).toString().length()
-        );  // LAZINESS
         tvTimeLeft.setText(
                 Integer.valueOf(currentTimeLeft).toString().toCharArray(),
                 0,
@@ -164,10 +237,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @UiThread
-    private void ResetTimingUI() {
-        sbWaitTime.setProgress(100);
-        currentTimeLeft = currentMaxTime;
-        UpdateTimingUI();
+    // Does this need to be synchronized? Only one UI thread though, so I should be good?
+    private void updateTimingControls (int currentMaxTime) {
+        sbWaitTime.setProgress(currentMaxTime);
+        etWaitTime.setText(
+                Integer.valueOf(currentMaxTime).toString().toCharArray(),
+                0,
+                Integer.valueOf(currentMaxTime).toString().length()
+        );  // LAZINESS
     }
 }
 
