@@ -22,6 +22,8 @@ import java.net.URL;
  */
 
 public class ImgDownload implements IImageDownloader{
+    // Caching link to check on: https://developer.android.com/training/displaying-bitmaps/cache-bitmap.html
+
     private Bitmap cat_error;
 
     @UiThread
