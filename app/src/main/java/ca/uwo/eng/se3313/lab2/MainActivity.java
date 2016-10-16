@@ -168,6 +168,7 @@ public class MainActivity extends AppCompatActivity {
 
 
         // Initialize progress bar and edit text and slider to same value (60s)
+        sbWaitTime.setMax(timeState.maxTime);   // Fix for shortened scroll bar in xml
         updateTimeCountdownUI(timeState.getCurrentMaxTime());
         updateTimingControls(timeState.getCurrentMaxTime());
 

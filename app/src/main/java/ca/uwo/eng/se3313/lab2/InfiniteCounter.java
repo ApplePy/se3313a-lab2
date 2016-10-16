@@ -14,24 +14,30 @@ class InfiniteCounter extends CountDownTimer {
     private Handler customHandler;
     static final int TIMER = 9001;
 
+    // HAX! Workaround to beat "missing last tick" issue.
+    boolean tick = false;
+
     InfiniteCounter(int finishMillis, int onTickMillis, Handler customHandler) {
-        super(finishMillis, onTickMillis);
+        super(finishMillis, onTickMillis / 2);
         this.finishMillis = finishMillis;
-        this.onTickMillis = onTickMillis;
+        this.onTickMillis = onTickMillis / 2;
         this.customHandler = customHandler;
     }
 
     @Override
     public void onTick(long millisUntilFinished) {
         Log.d("onTick", Long.toString(millisUntilFinished));
-        customHandler.sendEmptyMessage(TIMER);
-
-
+        // HAX! Workaround to beat "missing last tick" issue.
+        tick = !tick;
+        if (tick) {
+            Log.d ("onTick", "TOCK");
+            customHandler.sendEmptyMessage(TIMER);
+        }
     }
 
     @Override
     public void onFinish() {
         Log.d("onFinish", "Finished.");
-        new InfiniteCounter(finishMillis, onTickMillis, customHandler).start();
+        new InfiniteCounter(finishMillis, onTickMillis * 2, customHandler).start();
     }
 }
