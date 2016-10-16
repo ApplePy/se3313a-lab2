@@ -2,10 +2,12 @@ package ca.uwo.eng.se3313.lab2;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.UiThread;
 import android.support.v7.app.AppCompatActivity;
@@ -171,7 +173,10 @@ public class MainActivity extends AppCompatActivity {
         tvTimeLeft = (TextView) findViewById(R.id.tvTimeLeft);
         sbWaitTime = (SeekBar) findViewById(R.id.sbWaitTime);
         etWaitTime = (EditText) findViewById(R.id.etWaitTime);
-        imgDownloader = new ImgDownload(this);
+        imgDownloader = new ImgDownload((@NonNull final Throwable error) -> {{
+            Bitmap cat_error = BitmapFactory.decodeResource(this.getResources(), R.drawable.cat_error);
+            ivDisplay.setImageBitmap(cat_error);
+        }});
 
 
         // Initialize progress bar and edit text and slider to same value (60s)
@@ -219,21 +224,24 @@ public class MainActivity extends AppCompatActivity {
         skipBtn.setOnClickListener((View v) -> uiHandler.sendEmptyMessage(CHANGE_IMAGE));
 
         //Add functionality to the edit time
-        etWaitTime.setOnEditorActionListener((TextView v, int actionId, KeyEvent event) -> {
-            if ((actionId == EditorInfo.IME_NULL && event.getAction() == ACTION_DOWN)
-                    || actionId == EditorInfo.IME_ACTION_DONE) {
-                int newMax = Integer.parseInt(v.getText().toString());
-                if (newMax < timeState.minTime || newMax > timeState.maxTime) {
-                    v.setError("Must specify number between 5 and 60.");
-                } else {
-                    uiHandler.sendMessage(Message.obtain(uiHandler, MAX_CHANGE, newMax));
+        etWaitTime.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+            @Override
+            public boolean onEditorAction (TextView v, int actionId, KeyEvent event) {
+                if ((actionId == EditorInfo.IME_NULL && event.getAction() == ACTION_DOWN)
+                        || actionId == EditorInfo.IME_ACTION_DONE) {
+                    int newMax = Integer.parseInt(v.getText().toString());
+                    if (newMax < timeState.minTime || newMax > timeState.maxTime) {
+                        v.setError("Must specify number between 5 and 60.");
+                    } else {
+                        uiHandler.sendMessage(Message.obtain(uiHandler, MAX_CHANGE, newMax));
 
-                    // Source: http://stackoverflow.com/questions/3553779/android-dismiss-keyboard
-                    InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                    imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
+                        // Source: http://stackoverflow.com/questions/3553779/android-dismiss-keyboard
+                        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                        imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
+                    }
                 }
+                return true;
             }
-            return true;
         });
 
         // Add ability to change time
