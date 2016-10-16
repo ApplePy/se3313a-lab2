@@ -1,15 +1,19 @@
 package ca.uwo.eng.se3313.lab2;
 
+import android.content.Context;
 import android.graphics.Bitmap;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.support.annotation.Nullable;
 import android.support.annotation.UiThread;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.View;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -20,7 +24,8 @@ import android.widget.TextView;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.Semaphore;
+
+import static android.view.KeyEvent.ACTION_DOWN;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -170,7 +175,6 @@ public class MainActivity extends AppCompatActivity {
 
 
         // Initialize progress bar and edit text and slider to same value (60s)
-        sbWaitTime.setMax(timeState.maxTime);   // Fix for shortened scroll bar in xml
         updateTimeCountdownUI(timeState.getCurrentMaxTime());
         updateTimingControls(timeState.getCurrentMaxTime());
 
@@ -214,15 +218,35 @@ public class MainActivity extends AppCompatActivity {
         // Add functionality to skip button
         skipBtn.setOnClickListener((View v) -> uiHandler.sendEmptyMessage(CHANGE_IMAGE));
 
+        //Add functionality to the edit time
+        etWaitTime.setOnEditorActionListener((TextView v, int actionId, KeyEvent event) -> {
+            if ((actionId == EditorInfo.IME_NULL && event.getAction() == ACTION_DOWN)
+                    || actionId == EditorInfo.IME_ACTION_DONE) {
+                int newMax = Integer.parseInt(v.getText().toString());
+                if (newMax < timeState.minTime || newMax > timeState.maxTime) {
+                    v.setError("Must specify number between 5 and 60.");
+                } else {
+                    uiHandler.sendMessage(Message.obtain(uiHandler, MAX_CHANGE, newMax));
+
+                    // Source: http://stackoverflow.com/questions/3553779/android-dismiss-keyboard
+                    InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                    imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
+                }
+            }
+            return true;
+        });
+
         // Add ability to change time
         sbWaitTime.setOnSeekBarChangeListener( new SeekBar.OnSeekBarChangeListener(){
             @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {}
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                updateTimingControls(progress + 5);
+            }
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {}
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-                uiHandler.sendMessage(Message.obtain(uiHandler, MAX_CHANGE, seekBar.getProgress()));
+                uiHandler.sendMessage(Message.obtain(uiHandler, MAX_CHANGE, seekBar.getProgress() + 5));
             }
         });
 
@@ -248,7 +272,7 @@ public class MainActivity extends AppCompatActivity {
     @UiThread
     // Does this need to be synchronized? Only one UI thread though, so I should be good?
     private void updateTimingControls (int currentMaxTime) {
-        sbWaitTime.setProgress(currentMaxTime);
+        sbWaitTime.setProgress(currentMaxTime - 5);
         etWaitTime.setText(
                 Integer.valueOf(currentMaxTime).toString().toCharArray(),
                 0,
