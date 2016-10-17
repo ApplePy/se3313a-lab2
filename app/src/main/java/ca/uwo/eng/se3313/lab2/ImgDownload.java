@@ -8,8 +8,6 @@ import android.support.annotation.UiThread;
 import android.util.Log;
 import android.util.LruCache;
 
-import com.google.common.cache.Cache;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -28,12 +26,21 @@ public class ImgDownload implements IImageDownloader{
     private static final int CACHE_SIZE_MiB = 6;
     private ErrorHandler errorHandler;
     private Throwable error;
-    LruCache<String, Bitmap> bitmapCache;
+    private LruCache<String, Bitmap> bitmapCache;
 
     @UiThread
     public ImgDownload(ErrorHandler handler) {
         errorHandler = handler;
-        bitmapCache = new LruCache<String, Bitmap>(CACHE_SIZE_MiB * 1024 * 1024);
+        bitmapCache = new LruCache<String, Bitmap>(CACHE_SIZE_MiB * 1024 * 1024){
+            @Override
+            public void entryRemoved(boolean evicted,
+                                     String key,
+                                     Bitmap oldValue,
+                                     Bitmap newValue)
+            {
+                oldValue.recycle();
+            }
+        };
     }
 
     @UiThread
