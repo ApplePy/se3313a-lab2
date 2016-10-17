@@ -31,41 +31,17 @@ import static android.view.KeyEvent.ACTION_DOWN;
 public class MainActivity extends AppCompatActivity {
 
     /**
-     * View that showcases the image
+     * Message loop "what" constant, specifying that the countdown max changed. Send new countdown as int in Message obj.
      */
-    private ImageView ivDisplay;
-
+    public final static int MAX_CHANGE = 9002;
     /**
-     * Skip button
+     * Message loop "what" constant, specifying that the image expired.
      */
-    private ImageButton skipBtn;
-
+    public final static int CHANGE_IMAGE = 9003;
     /**
-     * Progress bar showing how many seconds left (percentage).
+     * Message loop "what" constant, specifying that a new image is available. Send new image as Bitmap in Message obj.
      */
-    private ProgressBar pbTimeLeft;
-
-    /**
-     * Label showing the seconds left.
-     */
-    private TextView tvTimeLeft;
-
-    /**
-     * Control to change the interval between switching images.
-     */
-    private SeekBar sbWaitTime;
-
-    /**
-     * Editable text to change the interval with {@link #sbWaitTime}.
-     */
-    private EditText etWaitTime;
-
-
-    /**
-     * Used to download images from the {@link #urlList}.
-     */
-    private IImageDownloader imgDownloader;
-
+    public final static int IMAGE_AVAILABLE = 9004;
     /**
      * List of image URLs of cute animals that will be displayed.
      */
@@ -87,26 +63,38 @@ public class MainActivity extends AppCompatActivity {
         add("http://i.imgur.com/8niPBvE.jpg");
         add("http://i.imgur.com/dci41f3.jpg");
     }};
-
+    /**
+     * View that showcases the image
+     */
+    private ImageView ivDisplay;
+    /**
+     * Skip button
+     */
+    private ImageButton skipBtn;
+    /**
+     * Progress bar showing how many seconds left (percentage).
+     */
+    private ProgressBar pbTimeLeft;
+    /**
+     * Label showing the seconds left.
+     */
+    private TextView tvTimeLeft;
+    /**
+     * Control to change the interval between switching images.
+     */
+    private SeekBar sbWaitTime;
+    /**
+     * Editable text to change the interval with {@link #sbWaitTime}.
+     */
+    private EditText etWaitTime;
+    /**
+     * Used to download images from the {@link #urlList}.
+     */
+    private IImageDownloader imgDownloader;
     /**
      * Contains the current state of countdown to next image switch.
      */
     private TimeState timeState = new TimeState();
-
-    /**
-     * Message loop "what" constant, specifying that the countdown max changed. Send new countdown as int in Message obj.
-     */
-    public final static int MAX_CHANGE = 9002;
-
-    /**
-     * Message loop "what" constant, specifying that the image expired.
-     */
-    public final static int CHANGE_IMAGE = 9003;
-
-    /**
-     * Message loop "what" constant, specifying that a new image is available. Send new image as Bitmap in Message obj.
-     */
-    public final static int IMAGE_AVAILABLE = 9004;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -267,7 +255,7 @@ public class MainActivity extends AppCompatActivity {
 
 
         // Create continuous timer to trigger countdowns (ticks once a second)
-        new InfiniteCounter(timeState.maxTime * 1000, 1000, uiHandler).start();
+        new InfiniteCounter(1000, uiHandler).start();
     }
 
 
