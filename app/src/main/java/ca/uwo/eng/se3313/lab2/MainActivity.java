@@ -8,10 +8,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
 import android.support.annotation.UiThread;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
@@ -25,6 +23,7 @@ import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Random;
 
 import static android.view.KeyEvent.ACTION_DOWN;
@@ -89,75 +88,25 @@ public class MainActivity extends AppCompatActivity {
         add("http://i.imgur.com/dci41f3.jpg");
     }};
 
-    private class TimeState {
-        // The range of allowable timing values and current time (MainActivity owns the state)
-        final int maxTime = 60;
-        final int minTime = 5;
-        private int currentTimeLeft = maxTime;
-        private int currentMaxTime = maxTime;
+    /**
+     * Contains the current state of countdown to next image switch.
+     */
+    private TimeState timeState = new TimeState();
 
-        // Lock objects
-        // PREVENT DEADLOCK! Grab currentTimeLock before MaxTime!
-        private final Object timeLeftLock = new Object();
-        private final Object maxTimeLock = new Object();
+    /**
+     * Message loop "what" constant, specifying that the countdown max changed. Send new countdown as int in Message obj.
+     */
+    public final static int MAX_CHANGE = 9002;
 
+    /**
+     * Message loop "what" constant, specifying that the image expired.
+     */
+    public final static int CHANGE_IMAGE = 9003;
 
-        int getCurrentTimeLeft() {synchronized (timeLeftLock) {return currentTimeLeft;}}
-        int getCurrentMaxTime() {synchronized (maxTimeLock) {return currentMaxTime;}}
-        @Nullable
-        Integer decrementTimeLeft() {
-            synchronized (timeLeftLock) {
-                if (currentTimeLeft - 1 >= 0) {
-                    return --currentTimeLeft;
-                } else {
-                    return null;
-                }
-            }
-        }
-        @Deprecated
-        private boolean setCurrentTimeLeft(int newTime) {
-            synchronized (timeLeftLock) {
-                synchronized (maxTimeLock) {
-                    if (newTime >= 0 && newTime <= currentMaxTime) {
-                        currentTimeLeft = newTime;
-                        return true;
-                    }
-                    return false;
-                }
-            }
-        }
-        int resetCurrentTimeLeft() {
-            synchronized (timeLeftLock) {
-                synchronized (maxTimeLock) {
-                    currentTimeLeft = currentMaxTime;
-                    return currentMaxTime;
-                }
-            }
-        }
-        void setCurrentMaxTime(int newMax) {
-            synchronized (timeLeftLock) {
-                synchronized (maxTimeLock) {
-                    if (newMax <= maxTime && newMax >= minTime) {
-                        currentMaxTime = newMax;
-                    } else if (newMax > maxTime) {
-                        currentMaxTime = maxTime;
-                    } else if (newMax < minTime) {
-                        currentMaxTime = minTime;
-                    }
-
-                    if (currentTimeLeft > currentMaxTime) {
-                        currentTimeLeft = currentMaxTime;
-                    }
-                }
-            }
-        }
-    }
-
-    TimeState timeState = new TimeState();
-
-    // Message loop "what"
-    final static int MAX_CHANGE = 9002;
-    final static int CHANGE_IMAGE = 9003;
+    /**
+     * Message loop "what" constant, specifying that a new image is available. Send new image as Bitmap in Message obj.
+     */
+    public final static int IMAGE_AVAILABLE = 9004;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -173,10 +122,73 @@ public class MainActivity extends AppCompatActivity {
         tvTimeLeft = (TextView) findViewById(R.id.tvTimeLeft);
         sbWaitTime = (SeekBar) findViewById(R.id.sbWaitTime);
         etWaitTime = (EditText) findViewById(R.id.etWaitTime);
-        imgDownloader = new ImgDownload((@NonNull final Throwable error) -> {{
+        // imgDownloader initialized below after uiHandler
+
+
+
+        // Set up message loop
+        Handler uiHandler = new Handler(Looper.getMainLooper()) {
+            @Override
+            /**
+             * This method handles the custom messages generated in this application.
+             * @param inputMessage The message that is sent.
+             */
+            public void handleMessage(Message inputMessage) {
+                switch (inputMessage.what) {
+                    // Triggered when the timer goes off to update the UI
+                    case InfiniteCounter.TIMER:
+                        // Update progress
+                        Integer proposedNewTime = timeState.decrementTimeLeft();
+
+                        // Update UI
+                        if (proposedNewTime != null)
+                            updateTimeCountdownUI(proposedNewTime);
+                        else
+                            this.sendEmptyMessage(CHANGE_IMAGE);
+                        break;
+                    // Triggered when scroll bar or EditText changed in a way that other elements need updating
+                    // Note: message obj contains the new max countdown time
+                    case MAX_CHANGE:
+                        timeState.setCurrentMaxTime((int)inputMessage.obj);     // Update max time with passed number
+                        updateTimingControls(timeState.getCurrentMaxTime());    // Update other timing controls
+                        updateTimeCountdownUI(timeState.getCurrentTimeLeft());  // Update countdown UI
+                        break;
+                    // Triggered when the countdown expires and the image needs to be update
+                    case CHANGE_IMAGE:
+                        // Pick a new random image and download it, sending a message when the image is ready
+                        imgDownloader.download(
+                                urlList.get(new Random().nextInt(urlList.size())),
+                                (Bitmap image) -> this.sendMessage(
+                                        Message.obtain(
+                                                this,
+                                                IMAGE_AVAILABLE,
+                                                image))
+                        );
+                        timeState.resetCurrentTimeLeft();                       // Reset countdown
+                        updateTimeCountdownUI(timeState.getCurrentMaxTime());   // Update countdown UI
+                        break;
+                    // Triggered when an image download has completed and a new image is available.
+                    // Note: message obj contains the new image
+                    case IMAGE_AVAILABLE:
+                        Bitmap photo = (Bitmap) inputMessage.obj;   // Get image
+                        ivDisplay.setImageBitmap(photo);            // Display image
+                        break;
+                }
+            }
+        };
+
+
+
+
+        // Set up message passing to/from imgDownloader
+        imgDownloader = new ImgDownload((@NonNull final Throwable error) -> {
+            // Get cat_error picture
+            // TODO: Am I going to leak this bitmap?
             Bitmap cat_error = BitmapFactory.decodeResource(this.getResources(), R.drawable.cat_error);
-            ivDisplay.setImageBitmap(cat_error);
-        }});
+            // Send cat_error picture for display
+            uiHandler.sendMessage(Message.obtain(uiHandler, IMAGE_AVAILABLE, cat_error));
+        });
+
 
 
         // Initialize progress bar and edit text and slider to same value (60s)
@@ -184,108 +196,105 @@ public class MainActivity extends AppCompatActivity {
         updateTimingControls(timeState.getCurrentMaxTime());
 
 
-        // Set up message loop
-        Handler uiHandler = new Handler(Looper.getMainLooper()) {
-            // Scary Java magic aside, stuff inside handleMessage is handled custom
-            @Override
-            public void handleMessage(Message inputMessage) {
-                switch (inputMessage.what) {
-                    case InfiniteCounter.TIMER:
-                        // Calculate new progress
-                        Integer proposedNewTime = timeState.decrementTimeLeft();
 
-                        // Update UI
-                        if (proposedNewTime != null) {
-                            updateTimeCountdownUI(proposedNewTime);
-                        } else {
-                            this.sendEmptyMessage(CHANGE_IMAGE);
-                        }
-                        break;
-                    case MAX_CHANGE:  // Scroll bar or edit text changed
-                        Log.d("MAX_CHANGE", "triggered");
-                        timeState.setCurrentMaxTime((int)inputMessage.obj);
-                        updateTimingControls(timeState.getCurrentMaxTime());
-                        updateTimeCountdownUI(timeState.getCurrentTimeLeft());
-                        break;
-                    case CHANGE_IMAGE:
-                        Log.d("CHANGE_IMAGE", "triggered");
-                        imgDownloader.download(
-                                urlList.get(new Random().nextInt(urlList.size())),
-                                (Bitmap image) -> ivDisplay.setImageBitmap(image)
-                        );
-                        timeState.resetCurrentTimeLeft();
-                        updateTimeCountdownUI(timeState.getCurrentMaxTime());
-                        break;
-                }
-            }
-        };
-
-        // Add functionality to skip button
+        // Set skip button to trigger CHANGE_IMAGE messages
         skipBtn.setOnClickListener((View v) -> uiHandler.sendEmptyMessage(CHANGE_IMAGE));
 
-        //Add functionality to the edit time
-        etWaitTime.setOnEditorActionListener(new TextView.OnEditorActionListener() {
-            @Override
-            public boolean onEditorAction (TextView v, int actionId, KeyEvent event) {
-                if ((actionId == EditorInfo.IME_NULL && event.getAction() == ACTION_DOWN)
-                        || actionId == EditorInfo.IME_ACTION_DONE) {
-                    int newMax = Integer.parseInt(v.getText().toString());
-                    if (newMax < timeState.minTime || newMax > timeState.maxTime) {
-                        v.setError("Must specify number between 5 and 60.");
-                    } else {
-                        uiHandler.sendMessage(Message.obtain(uiHandler, MAX_CHANGE, newMax));
+        //Add functionality to edit the time with typing in durations directly.
+        etWaitTime.setSelectAllOnFocus(false);  // Android doesn't always make up it's mind, do it manually
+        etWaitTime.setOnClickListener((View v) -> ((EditText) v).selectAll());      // Select all text when clicked on
+        etWaitTime.setOnEditorActionListener((TextView v, int actionId, KeyEvent event) ->  // Update when "Enter" or "Done" are pressed
+        {
+            // If the enter key was pressed down or if the "done" button was pressed
+            if ((actionId == EditorInfo.IME_NULL && event.getAction() == ACTION_DOWN)
+                    || actionId == EditorInfo.IME_ACTION_DONE)
+            {
+                int newMax = Integer.parseInt(v.getText().toString());  // Get the new time
 
-                        // Source: http://stackoverflow.com/questions/3553779/android-dismiss-keyboard
-                        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                        imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
-                    }
+                // If the number is invalid, specify error
+                if (newMax < timeState.minTime || newMax > timeState.maxTime) {
+                    v.setError("Must specify number between 5 and 60.");
+                } else {
+                    // Hide the keyboard
+                    // Source: http://stackoverflow.com/questions/3553779/android-dismiss-keyboard
+                    InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                    imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
+
+                    // Signal that a change to max countdown happened and it's new value
+                    uiHandler.sendMessage(Message.obtain(uiHandler, MAX_CHANGE, newMax));
                 }
-                return true;
             }
+            return true;
         });
 
         // Add ability to change time
-        sbWaitTime.setOnSeekBarChangeListener( new SeekBar.OnSeekBarChangeListener(){
+        sbWaitTime.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            /**
+             * Triggered when the seek bar value changed, but hasn't stopped changing.
+             * @param seekBar The UI object being changed.
+             * @param progress The current value of the seekBar.
+             * @param fromUser 'True' if the user is causing the change. 'False' otherwise.
+             */
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                // Update the timing controls to display the proposed changes as it happens
                 updateTimingControls(progress + 5);
             }
+
+            /**
+             * Triggered when the seek bar is starting to be changed.
+             * @param seekBar The UI object being changed.
+             */
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {}
+
+            /**
+             * Triggered when the seek bar is finished changing.
+             * @param seekBar The UI object being changed.
+             */
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
+                // User settled on a new max countdown, send message so it takes effect
                 uiHandler.sendMessage(Message.obtain(uiHandler, MAX_CHANGE, seekBar.getProgress() + 5));
             }
         });
 
+
+
         // Start with first image
         uiHandler.sendEmptyMessage(CHANGE_IMAGE);
 
-        // Create timer to trigger countdowns
+
+
+        // Create continuous timer to trigger countdowns (ticks once a second)
         new InfiniteCounter(timeState.maxTime * 1000, 1000, uiHandler).start();
     }
 
-    @UiThread
-    // Does this need to be synchronized? Only one UI thread though, so I should be good?
-    private void updateTimeCountdownUI(int currentTimeLeft) {
-        Integer progressPercent = 100 - currentTimeLeft * 100 / timeState.getCurrentMaxTime();
-        pbTimeLeft.setProgress(progressPercent);
-        tvTimeLeft.setText(
-                Integer.valueOf(currentTimeLeft).toString().toCharArray(),
-                0,
-                Integer.valueOf(currentTimeLeft).toString().length()
-        );  // LAZINESS
-    }
 
     @UiThread
-    // Does this need to be synchronized? Only one UI thread though, so I should be good?
+    /**
+     * This function updates the countdown portion of the UI with the latest current time left
+     * from the TimeState.
+     * @param currentTimeLeft The time left to be displayed on the UI.
+     */
+    private void updateTimeCountdownUI(int currentTimeLeft)
+    {
+        // Convert the current time left into a percentage left
+        Integer progressPercent = 100 - currentTimeLeft * 100 / timeState.getCurrentMaxTime();
+        pbTimeLeft.setProgress(progressPercent);                                    // Update the progress bar
+        tvTimeLeft.setText(String.format(Locale.CANADA, "%d", currentTimeLeft));    // Update text view
+    }
+
+
+    @UiThread
+    /**
+     * This function updates the editing countdown portion of the UI with the latest current max
+     * time from the TimeState.
+     * @param currentMaxTime The current max countdown time to be displayed on the UI.
+     */
     private void updateTimingControls (int currentMaxTime) {
-        sbWaitTime.setProgress(currentMaxTime - 5);
-        etWaitTime.setText(
-                Integer.valueOf(currentMaxTime).toString().toCharArray(),
-                0,
-                Integer.valueOf(currentMaxTime).toString().length()
-        );  // LAZINESS
+        sbWaitTime.setProgress(currentMaxTime - 5);                                 // Update the seek bar
+        etWaitTime.setText(String.format(Locale.CANADA, "%d", currentMaxTime));     // Update the edit text
     }
 }
 
