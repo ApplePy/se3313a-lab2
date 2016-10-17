@@ -170,8 +170,7 @@ public class MainActivity extends AppCompatActivity {
 
         // Set up message passing to/from imgDownloader
         imgDownloader = new ImgDownload((@NonNull final Throwable error) -> {
-            // Get cat_error picture
-            // TODO: Am I going to leak this bitmap?
+            // Get cat_error picture (leave it to GC to cleanup)
             Bitmap cat_error = BitmapFactory.decodeResource(this.getResources(), R.drawable.cat_error);
             // Send cat_error picture for display
             uiHandler.sendMessage(Message.obtain(uiHandler, IMAGE_AVAILABLE, cat_error));
