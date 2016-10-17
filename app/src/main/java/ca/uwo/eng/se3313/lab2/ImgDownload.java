@@ -59,6 +59,12 @@ public class ImgDownload implements IImageDownloader {
      */
     @Override
     public void download(@NonNull String imageUrl, @NonNull IImageDownloader.SuccessHandler handler) {
+        /**
+         * Asynchronous class that downloads images from given URLs using {@link AsyncTask}.
+         *
+         * @author Darryl Murray (dmurra47@uwo.ca)
+         * @version 1.0
+         */
         class DownloadTask extends AsyncTask<URL, Void, Bitmap> {
             private SuccessHandler handler;
 
@@ -84,14 +90,19 @@ public class ImgDownload implements IImageDownloader {
 
                 try {
                     // Source: http://stackoverflow.com/questions/5351689/alternative-to-java-net-url-for-custom-timeout-setting
+                    // Open connection to URL given
                     HttpURLConnection connection = (HttpURLConnection) params[0].openConnection();
+
+                    // Set timeouts so the 404 cat appears eventually
                     connection.setConnectTimeout(TIMEOUT_SECS * 1000);
                     connection.setReadTimeout(TIMEOUT_SECS * 1000);
+
+                    //Download image, convert into bitmap, and return it.
                     rawDownload = connection.getInputStream();
                     return BitmapFactory.decodeStream(rawDownload);
                 } catch(IOException e) {
                     error = e.getCause();
-                    return null;
+                    return null;    // Return null to signify the download failed.
                 }
             }
 
@@ -117,7 +128,7 @@ public class ImgDownload implements IImageDownloader {
         // Download if cache didn't have it, otherwise return cached result.
         if (cacheResult == null) {
             try {
-                // Create URL object, modify the handler to use in download task, and run task.
+                // Create URL object, modify the handler to use in download task to add caching, and run task.
                 URL imageURL = new URL(imageUrl);
                 Log.d("onDownload", "cache miss");
 
