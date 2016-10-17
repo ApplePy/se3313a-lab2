@@ -196,7 +196,13 @@ public class MainActivity extends AppCompatActivity {
             if ((actionId == EditorInfo.IME_NULL && event.getAction() == ACTION_DOWN)
                     || actionId == EditorInfo.IME_ACTION_DONE)
             {
-                int newMax = Integer.parseInt(v.getText().toString());  // Get the new time
+
+                Integer newMax = null;
+                try {
+                    newMax = Integer.parseInt(v.getText().toString());  // Get the new time
+                } catch (NumberFormatException e) {
+                    newMax = 0; // Handles non-numerical input
+                }
 
                 // If the number is invalid, specify error
                 if (newMax < timeState.minTime || newMax > timeState.maxTime) {
