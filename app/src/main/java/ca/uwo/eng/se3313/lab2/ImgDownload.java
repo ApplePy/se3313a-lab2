@@ -85,9 +85,6 @@ public class ImgDownload implements IImageDownloader {
              */
             @Override
             protected Bitmap doInBackground(URL... params) {
-
-                InputStream rawDownload;
-
                 try {
                     // Source: http://stackoverflow.com/questions/5351689/alternative-to-java-net-url-for-custom-timeout-setting
                     // Open connection to URL given
@@ -98,8 +95,9 @@ public class ImgDownload implements IImageDownloader {
                     connection.setReadTimeout(TIMEOUT_SECS * 1000);
 
                     //Download image, convert into bitmap, and return it.
-                    rawDownload = connection.getInputStream();
-                    return BitmapFactory.decodeStream(rawDownload);
+                    try (InputStream rawDownload = connection.getInputStream()) {
+                        return BitmapFactory.decodeStream(rawDownload);
+                    }
                 } catch(IOException e) {
                     error = e.getCause();
                     return null;    // Return null to signify the download failed.
